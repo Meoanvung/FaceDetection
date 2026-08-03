@@ -1,9 +1,7 @@
 package com.example.facedetection.camera
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
+import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 import com.google.mlkit.vision.facemesh.FaceMesh
@@ -14,56 +12,26 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
         color = Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = 1f
-        alpha = 200
+        alpha = 80
     }
 
     private var faceMesh: FaceMesh? = null
-    private var imageWidth: Int = 0
-    private var imageHeight: Int = 0
+    private var currentBitmap: Bitmap? = null
     private var isMirror: Boolean = false
     
-    private val eyeReshaper = EyeReshaper()
-    private val noseReshaper = NoseReshaper()
-    private val faceSlimmer = FaceSlimmer()
+    private val faceMorpher = FaceMorpher()
+    private val faceWarper = FaceMeshWarper()
 
     var lipReshapeIntensity: Float = 0f
-        set(value) {
-            field = value
-            postInvalidate()
-        }
-
+        set(value) { field = value; postInvalidate() }
     var eyeReshapeIntensity: Float = 0f
-        set(value) {
-            field = value
-            postInvalidate()
-        }
-
+        set(value) { field = value; postInvalidate() }
     var noseReshapeIntensity: Float = 0f
-        set(value) {
-            field = value
-            postInvalidate()
-        }
+        set(value) { field = value; postInvalidate() }
 
-    var faceSlimIntensity: Float = 0f
-        set(value) {
-            field = value
-            postInvalidate()
-        }
-
-    private val upperLipIndices = intArrayOf(
-        0, 37, 39, 40, 61, 267, 269, 270, 291,
-        78, 80, 81, 82, 13, 312, 311, 310, 308, 191, 409, 415
-    )
-
-    private val lowerLipIndices = intArrayOf(
-        17, 84, 91, 146, 178, 181, 314, 317, 318, 321, 325, 375, 402, 405,
-        95, 88, 14
-    )
-
-    fun updateFaceMesh(mesh: FaceMesh?, width: Int, height: Int, mirror: Boolean) {
+    fun updateData(mesh: FaceMesh?, bitmap: Bitmap?, mirror: Boolean) {
         this.faceMesh = mesh
-        this.imageWidth = width
-        this.imageHeight = height
+        this.currentBitmap = bitmap
         this.isMirror = mirror
         postInvalidate()
     }
@@ -71,62 +39,54 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val mesh = faceMesh ?: return
-        if (imageWidth == 0 || imageHeight == 0) return
+        val bitmap = currentBitmap ?: return
 
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
-        val scale = Math.max(viewWidth / imageWidth, viewHeight / imageHeight)
-        val offsetX = (viewWidth - imageWidth * scale) / 2f
-        val offsetY = (viewHeight - imageHeight * scale) / 2f
+        val scale = Math.max(viewWidth / bitmap.width, viewHeight / bitmap.height)
+        val offsetX = (viewWidth - bitmap.width * scale) / 2f
+        val offsetY = (viewHeight - bitmap.height * scale) / 2f
 
-        val allPoints = mesh.allPoints
-        if (allPoints.isEmpty()) return
+        // 1. Lấy tọa độ các điểm đã biến dạng (Morphing)
+        val (morphedX, morphedY) = faceMorpher.getMorphedPoints(
+            mesh.allPoints,
+            lipReshapeIntensity,
+            eyeReshapeIntensity,
+            noseReshapeIntensity
+        )
 
-        val lipCenterY = (allPoints[13].position.y + allPoints[14].position.y) / 2f
+        // 2. Chuyển đổi tọa độ sang hệ tọa độ View (Scale & Offset)
+        val tx = FloatArray(468)
+        val ty = FloatArray(468)
 
-        // Prepare arrays with original image coordinates
-        val pointsX = FloatArray(allPoints.size)
-        val pointsY = FloatArray(allPoints.size)
-        for (i in allPoints.indices) {
-            pointsX[i] = allPoints[i].position.x
-            pointsY[i] = allPoints[i].position.y
+        for (i in 0 until 468) {
+            var x = morphedX[i] * scale + offsetX
+            if (isMirror) x = viewWidth - x
+            val y = morphedY[i] * scale + offsetY
+            tx[i] = x
+            ty[i] = y
         }
 
-        // 1. Apply Lip Reshaping (Logic inside Overlay)
-        for (i in allPoints.indices) {
-            val idx = allPoints[i].index
-            val dist = pointsY[i] - lipCenterY
-            if (upperLipIndices.contains(idx) || lowerLipIndices.contains(idx)) {
-                pointsY[i] += dist * lipReshapeIntensity
-            }
+        // 3. Vẽ toàn bộ ảnh gốc làm nền
+        val matrix = Matrix()
+        matrix.postScale(scale, scale)
+        if (isMirror) {
+            matrix.postScale(-1f, 1f)
+            matrix.postTranslate(viewWidth, 0f)
         }
+        matrix.postTranslate(offsetX, offsetY)
+        canvas.drawBitmap(bitmap, matrix, null)
 
-        // 2. Apply Eye Reshaping (Calling separate file logic)
-        eyeReshaper.applyReshape(allPoints, pointsX, pointsY, eyeReshapeIntensity)
+        // 4. Vẽ phần khuôn mặt BIẾN DẠNG đè lên
+        faceWarper.drawWarpedImage(canvas, bitmap, mesh, tx, ty)
 
-        // 3. Apply Nose Reshaping (Calling separate file logic)
-        noseReshaper.applyReshape(allPoints, pointsX, pointsY, noseReshapeIntensity)
-
-        // 4. Apply Face Slimming (Calling separate file logic)
-        faceSlimmer.applyReshape(allPoints, pointsX, pointsY, faceSlimIntensity)
-
-        // 5. Scale and Draw
-        val tx = FloatArray(allPoints.size)
-        val ty = FloatArray(allPoints.size)
-        for (i in allPoints.indices) {
-            var finalX = pointsX[i] * scale + offsetX
-            if (isMirror) finalX = viewWidth - finalX
-            val finalY = pointsY[i] * scale + offsetY
-            tx[i] = finalX
-            ty[i] = finalY
-        }
-
+        // 5. Vẽ lưới (Tùy chọn)
         for (triangle in mesh.allTriangles) {
-            val i1 = allPoints.indexOf(triangle.allPoints[0])
-            val i2 = allPoints.indexOf(triangle.allPoints[1])
-            val i3 = allPoints.indexOf(triangle.allPoints[2])
-
-            if (i1 != -1 && i2 != -1 && i3 != -1) {
+            val i1 = triangle.allPoints[0].index
+            val i2 = triangle.allPoints[1].index
+            val i3 = triangle.allPoints[2].index
+            
+            if (i1 < 468 && i2 < 468 && i3 < 468) {
                 canvas.drawLine(tx[i1], ty[i1], tx[i2], ty[i2], linePaint)
                 canvas.drawLine(tx[i2], ty[i2], tx[i3], ty[i3], linePaint)
                 canvas.drawLine(tx[i3], ty[i3], tx[i1], ty[i1], linePaint)
