@@ -44,9 +44,16 @@ class CameraActivity : ComponentActivity() {
         val slLip = findViewById<SeekBar>(R.id.slLip)
         val slEye = findViewById<SeekBar>(R.id.slEye)
         val slNose = findViewById<SeekBar>(R.id.slNose)
+        val slChin = findViewById<SeekBar>(R.id.slChin)
+        val btnToggleMesh = findViewById<Button>(R.id.btnToggleMesh)
 
         btnBack.setOnClickListener {
             finish()
+        }
+
+        btnToggleMesh.setOnClickListener {
+            overlay.showMesh = !overlay.showMesh
+            btnToggleMesh.text = if (overlay.showMesh) "Hide Mesh" else "Show Mesh"
         }
 
         slLip.progress = 50
@@ -73,6 +80,15 @@ class CameraActivity : ComponentActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 // 0 là bình thường, 100 là bóp mũi thon gọn tối đa
                 overlay.noseReshapeIntensity = progress / 100f * 0.4f
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        slChin.progress = 0
+        slChin.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                overlay.chinReshapeIntensity = progress / 100f * 0.6f
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}

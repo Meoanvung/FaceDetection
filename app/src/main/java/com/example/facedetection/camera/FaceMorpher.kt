@@ -5,6 +5,7 @@ import com.google.mlkit.vision.facemesh.FaceMeshPoint
 class FaceMorpher {
     private val eyeReshaper = EyeReshaper()
     private val noseReshaper = NoseReshaper()
+    private val chinReshaper = ChinReshaper()
 
     private val upperLipIndices = intArrayOf(0, 37, 39, 40, 61, 267, 269, 270, 291, 78, 80, 81, 82, 13, 312, 311, 310, 308, 191, 409, 415)
     private val lowerLipIndices = intArrayOf(17, 84, 91, 146, 178, 181, 314, 317, 318, 321, 325, 375, 402, 405, 95, 88, 14)
@@ -13,7 +14,8 @@ class FaceMorpher {
         allPoints: List<FaceMeshPoint>,
         lipIntensity: Float,
         eyeIntensity: Float,
-        noseIntensity: Float
+        noseIntensity: Float,
+        chinIntensity: Float
     ): Pair<FloatArray, FloatArray> {
         // Khởi tạo mảng 468 điểm để đảm bảo đúng Index của Face Mesh
         val px = FloatArray(468)
@@ -48,6 +50,9 @@ class FaceMorpher {
 
         // 3. Morph Nose
         noseReshaper.applyReshape(allPoints, px, py, noseIntensity)
+
+        // 4. Morph Chin (V-line)
+        chinReshaper.applyReshape(allPoints, px, py, chinIntensity)
 
         return Pair(px, py)
     }

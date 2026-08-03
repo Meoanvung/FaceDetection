@@ -16,10 +16,6 @@ class NoseReshaper {
     // Nose tip area
     private val noseTipIndices = intArrayOf(1, 2, 5, 4, 45, 275)
 
-    /**
-     * Reshapes the nose.
-     * intensity > 0: slims the nose (moves wings inward)
-     */
     fun applyReshape(
         allPoints: List<FaceMeshPoint>,
         px: FloatArray,
