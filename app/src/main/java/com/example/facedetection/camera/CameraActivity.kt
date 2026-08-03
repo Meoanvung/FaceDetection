@@ -2,6 +2,8 @@ package com.example.facedetection.camera
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -42,7 +44,6 @@ class CameraActivity : ComponentActivity() {
         val slLip = findViewById<SeekBar>(R.id.slLip)
         val slEye = findViewById<SeekBar>(R.id.slEye)
         val slNose = findViewById<SeekBar>(R.id.slNose)
-        val slSlim = findViewById<SeekBar>(R.id.slSlim)
 
         btnBack.setOnClickListener {
             finish()
@@ -72,16 +73,6 @@ class CameraActivity : ComponentActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 // 0 là bình thường, 100 là bóp mũi thon gọn tối đa
                 overlay.noseReshapeIntensity = progress / 100f * 0.4f
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-
-        slSlim.progress = 0
-        slSlim.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                // 0 là bình thường, 100 là bóp mặt V-Line tối đa
-                overlay.faceSlimIntensity = progress / 100f * 0.4f
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -148,20 +139,23 @@ class CameraActivity : ComponentActivity() {
             detector.process(image)
                 .addOnSuccessListener { result ->
                     if (result.isNotEmpty()) {
-                        // ML Kit xử lý ảnh theo rotationDegrees.
-                        // Nếu xoay 90/270, tọa độ kết quả khớp với khung hình đã đảo Rộng/Cao
-                        val isRotated = rotationDegrees == 90 || rotationDegrees == 270
-                        val rotatedWidth = if (isRotated) imageProxy.height else imageProxy.width
-                        val rotatedHeight = if (isRotated) imageProxy.width else imageProxy.height
+                        val bitmap = imageProxy.toBitmap()
+                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
 
-                        overlay.updateFaceMesh(
+                        val rotatedBitmap = if (rotationDegrees != 0) {
+                            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                        } else {
+                            bitmap
+                        }
+
+                        overlay.updateData(
                             result[0],
-                            rotatedWidth,
-                            rotatedHeight,
-                            false // Tạm thời tắt Mirroring để test với Back Camera
+                            rotatedBitmap,
+                            cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA
                         )
                     } else {
-                        overlay.updateFaceMesh(null, 0, 0, false)
+                        overlay.updateData(null, null, false)
                     }
                 }
                 .addOnFailureListener { e ->

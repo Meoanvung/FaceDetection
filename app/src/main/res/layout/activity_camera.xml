@@ -77,21 +77,6 @@
             android:layout_height="wrap_content"
             android:max="100"
             android:progress="0" />
-
-        <TextView
-            android:id="@+id/tvLabelSlim"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Face Slimming"
-            android:textColor="@android:color/white" />
-
-        <SeekBar
-            android:id="@+id/slSlim"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="100"
-            android:progress="0" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
