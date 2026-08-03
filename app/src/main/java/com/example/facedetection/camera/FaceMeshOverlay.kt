@@ -19,6 +19,9 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
     private var currentBitmap: Bitmap? = null
     private var isMirror: Boolean = false
     
+    var showMesh: Boolean = true
+        set(value) { field = value; postInvalidate() }
+    
     private val faceMorpher = FaceMorpher()
     private val faceWarper = FaceMeshWarper()
 
@@ -27,6 +30,8 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
     var eyeReshapeIntensity: Float = 0f
         set(value) { field = value; postInvalidate() }
     var noseReshapeIntensity: Float = 0f
+        set(value) { field = value; postInvalidate() }
+    var chinReshapeIntensity: Float = 0f
         set(value) { field = value; postInvalidate() }
 
     fun updateData(mesh: FaceMesh?, bitmap: Bitmap?, mirror: Boolean) {
@@ -52,7 +57,8 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
             mesh.allPoints,
             lipReshapeIntensity,
             eyeReshapeIntensity,
-            noseReshapeIntensity
+            noseReshapeIntensity,
+            chinReshapeIntensity
         )
 
         // 2. Chuyển đổi tọa độ sang hệ tọa độ View (Scale & Offset)
@@ -67,29 +73,27 @@ class FaceMeshOverlay(context: Context, attrs: AttributeSet?) : View(context, at
             ty[i] = y
         }
 
-        // 3. Vẽ toàn bộ ảnh gốc làm nền
-        val matrix = Matrix()
-        matrix.postScale(scale, scale)
-        if (isMirror) {
-            matrix.postScale(-1f, 1f)
-            matrix.postTranslate(viewWidth, 0f)
-        }
-        matrix.postTranslate(offsetX, offsetY)
-        canvas.drawBitmap(bitmap, matrix, null)
+        // 3. Vẽ toàn bộ bức ảnh đã biến dạng (Full Frame Warp)
+        // Cách này vẽ toàn bộ frame (bao gồm cả tóc, cổ, nền) qua một lưới biến dạng duy nhất.
+        // Điều này đảm bảo khi cằm bóp vào, phần nền xung quanh sẽ "trôi" theo, 
+        // không để lại hiện tượng bóng ma hay các vết mờ cục bộ.
+        faceWarper.drawFullWarpedImage(
+            canvas, bitmap, mesh, tx, ty,
+            viewWidth, viewHeight, scale, offsetX, offsetY, isMirror
+        )
 
-        // 4. Vẽ phần khuôn mặt BIẾN DẠNG đè lên
-        faceWarper.drawWarpedImage(canvas, bitmap, mesh, tx, ty)
-
-        // 5. Vẽ lưới (Tùy chọn)
-        for (triangle in mesh.allTriangles) {
-            val i1 = triangle.allPoints[0].index
-            val i2 = triangle.allPoints[1].index
-            val i3 = triangle.allPoints[2].index
-            
-            if (i1 < 468 && i2 < 468 && i3 < 468) {
-                canvas.drawLine(tx[i1], ty[i1], tx[i2], ty[i2], linePaint)
-                canvas.drawLine(tx[i2], ty[i2], tx[i3], ty[i3], linePaint)
-                canvas.drawLine(tx[i3], ty[i3], tx[i1], ty[i1], linePaint)
+        // 4. Vẽ lưới (Chỉ vẽ khi showMesh = true)
+        if (showMesh) {
+            for (triangle in mesh.allTriangles) {
+                val i1 = triangle.allPoints[0].index
+                val i2 = triangle.allPoints[1].index
+                val i3 = triangle.allPoints[2].index
+                
+                if (i1 < 468 && i2 < 468 && i3 < 468) {
+                    canvas.drawLine(tx[i1], ty[i1], tx[i2], ty[i2], linePaint)
+                    canvas.drawLine(tx[i2], ty[i2], tx[i3], ty[i3], linePaint)
+                    canvas.drawLine(tx[i3], ty[i3], tx[i1], ty[i1], linePaint)
+                }
             }
         }
     }
